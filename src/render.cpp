@@ -152,7 +152,7 @@ void Panel::render() {
         drawText(g,wide(group.name),RectF(inset+20,inset+9,group.width-133.f,38),14,Color(255,244,244,251),true);
         auto count=std::to_wstring(entries.size());
         drawText(g,count,RectF(inset+group.width-114.f,inset+12,28,30),11,Color(170,236,236,251),false,true);
-        const float right=inset+group.width;
+        const float right=static_cast<float>(inset+group.width);
         Pen line(Color(210,244,244,255),1.5f);
         if(group.collapsed) {g.DrawLine(&line,right-70,27.f,right-65,32.f); g.DrawLine(&line,right-65,32.f,right-70,37.f);}
         else {g.DrawLine(&line,right-71,30.f,right-66,35.f); g.DrawLine(&line,right-66,35.f,right-61,30.f);}
@@ -169,7 +169,7 @@ void Panel::render() {
                 if(i==hovered || i==selected) fillRound(g,RectF(r.X+3,r.Y+2,r.Width-6,r.Height-4),10,Color(i==selected ? 45 : 25,255,255,255));
                 if(entries[i].icon) g.DrawImage(entries[i].icon.get(),RectF(r.X+(r.Width-group.iconSize)/2,r.Y+7,static_cast<float>(group.iconSize),static_cast<float>(group.iconSize)));
                 else {fillRound(g,RectF(r.X+(r.Width-group.iconSize)/2,r.Y+7,static_cast<float>(group.iconSize),static_cast<float>(group.iconSize)),8,Color(220,163,151,229));
-                    drawText(g,L"↗",RectF(r.X,r.Y+7,r.Width,static_cast<float>(group.iconSize)),22,Color::White,false,true);}
+                    drawText(g,L"↗",RectF(r.X,r.Y+7,r.Width,static_cast<float>(group.iconSize)),22,Color(255,255,255,255),false,true);}
                 if(group.showLabels) {
                     auto name=wide(entries[i].item.label); RectF textRect(r.X+2,r.Y+group.iconSize+12,r.Width-4,23);
                     drawText(g,name,RectF(textRect.X,textRect.Y+1,textRect.Width,textRect.Height),11,Color(130,0,0,0),false,true);

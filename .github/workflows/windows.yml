@@ -25,9 +25,6 @@ jobs:
       - name: Launch smoke check
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath .\build\Release\FencesT.exe -ArgumentList '--background' -PassThru
-          Start-Sleep -Seconds 5
-          if ($process.HasExited) { throw "FencesT exited unexpectedly: $($process.ExitCode)" }
           Add-Type @'
           using System;
           using System.Runtime.InteropServices;
@@ -36,9 +33,18 @@ jobs:
             public static extern IntPtr FindWindow(string name, string title);
             [DllImport("user32.dll")]
             public static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
+            public static IntPtr FindPanel() { return FindWindow("FencesT.Panel", null); }
           }
           '@
-          if ([FencesSmoke]::FindWindow('FencesT.Panel', $null) -eq [IntPtr]::Zero) {
+          $process = Start-Process -FilePath .\build\Release\FencesT.exe -ArgumentList '--background' -PassThru
+          $panel = [IntPtr]::Zero
+          for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            if ($process.HasExited) { throw "FencesT exited unexpectedly: $($process.ExitCode)" }
+            $panel = [FencesSmoke]::FindPanel()
+            if ($panel -ne [IntPtr]::Zero) { break }
+            Start-Sleep -Seconds 1
+          }
+          if ($panel -eq [IntPtr]::Zero) {
             Stop-Process -Id $process.Id
             throw 'No desktop panel was created'
           }
