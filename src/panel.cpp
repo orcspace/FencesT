@@ -7,6 +7,7 @@ using namespace Gdiplus;
 namespace ft {
 Panel::Panel(App& a,Group g):app(a),group(std::move(g)) {}
 Panel::~Panel() {
+    if(tooltip) DestroyWindow(tooltip);
     if(folderWatch!=INVALID_HANDLE_VALUE) FindCloseChangeNotification(folderWatch);
     if(hwnd) {if(registered) RevokeDragDrop(hwnd); DestroyWindow(hwnd);}
 }
@@ -18,6 +19,14 @@ bool Panel::create() {
     if(!hwnd) return false;
     scale=GetDpiForWindow(hwnd)/96.f;
     registered=SUCCEEDED(RegisterDragDrop(hwnd,this));
+    tooltip=CreateWindowExW(WS_EX_TOPMOST,TOOLTIPS_CLASSW,nullptr,WS_POPUP|TTS_ALWAYSTIP|TTS_NOPREFIX,
+        CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,hwnd,nullptr,app.instance,nullptr);
+    if(tooltip) {
+        TOOLINFOW tool{}; tool.cbSize=sizeof(tool); tool.uFlags=TTF_IDISHWND|TTF_SUBCLASS; tool.hwnd=hwnd;
+        tool.uId=reinterpret_cast<UINT_PTR>(hwnd); tool.lpszText=LPSTR_TEXTCALLBACKW;
+        SendMessageW(tooltip,TTM_ADDTOOLW,0,reinterpret_cast<LPARAM>(&tool));
+        SendMessageW(tooltip,TTM_SETMAXTIPWIDTH,0,350); SendMessageW(tooltip,TTM_SETDELAYTIME,TTDT_INITIAL,500);
+    }
     BOOL exclude=TRUE; DwmSetWindowAttribute(hwnd,DWMWA_EXCLUDED_FROM_PEEK,&exclude,sizeof(exclude));
     background=loadImage(wide(group.image)); refreshItems(); updateWatch(); resizeFromModel();
     if(app.visible) ShowWindow(hwnd,SW_SHOWNOACTIVATE);
@@ -164,6 +173,14 @@ LRESULT CALLBACK Panel::proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         if(!p->tracking) {TRACKMOUSEEVENT t{sizeof(t),TME_LEAVE,hwnd,0}; TrackMouseEvent(&t); p->tracking=true;} return 0;
     }
     case WM_MOUSELEAVE: p->tracking=false; p->hovered=-1; p->render(); return 0;
+    case WM_NOTIFY: {
+        auto* notification=reinterpret_cast<NMHDR*>(lp);
+        if(notification->code==TTN_GETDISPINFOW) {
+            auto* info=reinterpret_cast<NMTTDISPINFOW*>(lp);
+            p->tipText=p->hovered>=0 && p->hovered<static_cast<int>(p->entries.size()) ? wide(p->entries[p->hovered].item.label) : L"";
+            info->lpszText=p->tipText.data();
+        } return 0;
+    }
     case WM_MOUSEWHEEL: p->scroll-=GET_WHEEL_DELTA_WPARAM(wp)/WHEEL_DELTA; p->clampScroll(); p->render(); return 0;
     case WM_CONTEXTMENU: {POINT point{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)}; if(point.x==-1) GetCursorPos(&point); p->menu(point); return 0;}
     case WM_ENTERSIZEMOVE: p->moving=true; return 0;

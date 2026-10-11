@@ -12,10 +12,13 @@ void roundPath(GraphicsPath& p,RectF r,float radius) {
 }
 void fillRound(Graphics& g,RectF r,float radius,Color color) {GraphicsPath p; roundPath(p,r,radius); SolidBrush b(color); g.FillPath(&b,&p);}
 void drawText(Graphics& g,const std::wstring& text,RectF rect,float size,Color color,bool bold,bool center) {
-    Font font(L"Segoe UI",size,bold ? FontStyleBold : FontStyleRegular,UnitPixel); SolidBrush brush(color);
+    const int style=bold ? FontStyleBold : FontStyleRegular;
+    auto font=std::make_unique<Font>(L"Segoe UI",size,style,UnitPixel);
+    if(font->GetLastStatus()!=Ok) font=std::make_unique<Font>(FontFamily::GenericSansSerif(),size,style,UnitPixel);
+    SolidBrush brush(color);
     StringFormat format; format.SetTrimming(StringTrimmingEllipsisCharacter); format.SetFormatFlags(StringFormatFlagsNoWrap);
     format.SetLineAlignment(StringAlignmentCenter); if(center) format.SetAlignment(StringAlignmentCenter);
-    g.DrawString(text.c_str(),static_cast<INT>(text.size()),&font,rect,&format,&brush);
+    g.DrawString(text.c_str(),static_cast<INT>(text.size()),font.get(),rect,&format,&brush);
 }
 std::unique_ptr<Bitmap> loadImage(const std::wstring& path) {
     std::unique_ptr<Bitmap> source(Bitmap::FromFile(path.c_str()));

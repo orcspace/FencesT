@@ -21,3 +21,11 @@
 - [ ] Check idle CPU, rapid slider updates and large/slow network folder behavior.
 
 Source code and cross-compilation alone do not establish these Windows shell/UI behaviors. Record runtime evidence here as testing is performed.
+
+## Initial verification evidence
+
+- GCC native model tests: passed, including corruption and truncation checks.
+- MinGW-w64 x64 Release build: passed without compiler warnings; imports only Windows system DLLs.
+- Microsoft compiler + model tests + process launch + ZIP packaging: passed in GitHub Actions (Windows Server 2022 runner).
+- Wine 9 with a 1600×1000 test display: settings and desktop panels render; labels can be hidden; radius 64 and Transparent mode apply live; searching `note` finds only the Notepad entry. Added a font fallback after observing missing Segoe UI in this environment.
+- These checks do **not** replace the Windows 11 shell checklist above; native desktop integration, multiple monitors and real wallpaper composition require verification on the target OS.

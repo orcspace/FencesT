@@ -53,7 +53,8 @@ struct Wallpaper {
 
 class Panel final : public IDropTarget {
 public:
-    App& app; Group group; HWND hwnd=nullptr; float scale=1;
+    App& app; Group group; HWND hwnd=nullptr, tooltip=nullptr; float scale=1;
+    std::wstring tipText;
     std::vector<Entry> entries;
     std::unique_ptr<Gdiplus::Bitmap> background, backdrop;
     int hovered=-1, selected=-1, scroll=0; bool dropHover=false, moving=false, tracking=false;
@@ -81,6 +82,7 @@ class Settings {
 public:
     explicit Settings(App& app):app(app){} ~Settings();
     App& app; HWND hwnd=nullptr; HFONT font=nullptr, titleFont=nullptr; HBRUSH brush=nullptr, fieldBrush=nullptr;
+    HBRUSH sideBrush=nullptr;
     float scale=1; uint32_t target=0; bool loading=false; int tab=0;
     std::map<int,HWND> controls;
     std::vector<size_t> filtered;

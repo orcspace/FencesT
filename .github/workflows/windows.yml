@@ -28,7 +28,25 @@ jobs:
           $process = Start-Process -FilePath .\build\Release\FencesT.exe -ArgumentList '--background' -PassThru
           Start-Sleep -Seconds 5
           if ($process.HasExited) { throw "FencesT exited unexpectedly: $($process.ExitCode)" }
-          Stop-Process -Id $process.Id
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class FencesSmoke {
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)]
+            public static extern IntPtr FindWindow(string name, string title);
+            [DllImport("user32.dll")]
+            public static extern bool PostMessage(IntPtr window, uint message, IntPtr w, IntPtr l);
+          }
+          '@
+          if ([FencesSmoke]::FindWindow('FencesT.Panel', $null) -eq [IntPtr]::Zero) {
+            Stop-Process -Id $process.Id
+            throw 'No desktop panel was created'
+          }
+          $controller = [FencesSmoke]::FindWindow('FencesT.Controller', 'FencesT')
+          [void][FencesSmoke]::PostMessage($controller, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+          if (-not $process.WaitForExit(5000)) { Stop-Process -Id $process.Id; throw 'Graceful exit timed out' }
+          $layout = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'FencesT\layout.fencest'
+          if (-not (Test-Path $layout)) { throw 'Initial layout was not saved' }
       - name: Package
         run: cpack --config build/CPackConfig.cmake -C Release -B dist
       - uses: actions/upload-artifact@v6

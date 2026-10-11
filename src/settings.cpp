@@ -11,7 +11,7 @@ static bool appearance(int id) {return id>=1200 && id<1300;}
 static bool shortcuts(int id) {return id>=1300 && id<1400;}
 static bool global(int id) {return id>=1400;}
 static std::wstring lowered(std::wstring value) {for(auto& c:value) c=static_cast<wchar_t>(towlower(c)); return value;}
-Settings::~Settings() {if(hwnd) DestroyWindow(hwnd); if(font) DeleteObject(font); if(titleFont) DeleteObject(titleFont); if(brush) DeleteObject(brush); if(fieldBrush) DeleteObject(fieldBrush);}
+Settings::~Settings() {if(hwnd) DestroyWindow(hwnd); if(font) DeleteObject(font); if(titleFont) DeleteObject(titleFont); if(brush) DeleteObject(brush); if(fieldBrush) DeleteObject(fieldBrush); if(sideBrush) DeleteObject(sideBrush);}
 Panel* Settings::panel() {return app.find(target);}
 void Settings::open(uint32_t id) {
     if(id) target=id;
@@ -29,14 +29,14 @@ void Settings::open(uint32_t id) {
 void Settings::build() {
     font=CreateFontW(-static_cast<int>(13*scale),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
     titleFont=CreateFontW(-static_cast<int>(15*scale),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
-    brush=CreateSolidBrush(RGB(18,20,27)); fieldBrush=CreateSolidBrush(RGB(36,39,50));
+    brush=CreateSolidBrush(RGB(18,20,27)); fieldBrush=CreateSolidBrush(RGB(36,39,50)); sideBrush=CreateSolidBrush(RGB(23,25,34));
     auto add=[&](int id,const wchar_t* cls,const wchar_t* text,DWORD style) {
         HWND child=CreateWindowExW(0,cls,text,WS_CHILD|WS_VISIBLE|WS_TABSTOP|style,0,0,1,1,hwnd,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),app.instance,nullptr);
         controls[id]=child; SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE); return child;
     };
     add(Groups,L"LISTBOX",L"Группы",LBS_NOTIFY|LBS_OWNERDRAWFIXED|LBS_HASSTRINGS|WS_VSCROLL);
     SendMessageW(controls[Groups],LB_SETITEMHEIGHT,0,static_cast<LPARAM>(52*scale));
-    for(auto [id,text]:std::vector<std::pair<int,const wchar_t*>>{{New,L"+ Новая группа"},{Duplicate,L"Дублировать"},{Delete,L"Удалить"},
+    for(auto [id,text]:std::vector<std::pair<int,const wchar_t*>>{{New,L"+ Новая группа"},{Duplicate,L"Копия"},{Delete,L"Удалить"},
         {TabLook,L"Оформление"},{TabItems,L"Ярлыки"},{TabApp,L"Настройки"},{Glass,L"Liquid Glass"},{Clear,L"Прозрачный"},{Matte,L"Тёмный матовый"},
         {Tint,L"Цвет фона"},{Background,L"Выбрать картинку…"},{ClearBackground,L"Убрать картинку"},
         {AddFiles,L"+ Файлы и приложения"},{AddFolder,L"+ Ярлык папки"},{Remove,L"Убрать ярлык"},{Portal,L"Связать с папкой…"},
@@ -51,7 +51,7 @@ void Settings::build() {
         int lo=id==IconSize ? 24 : 0, hi=id==Radius ? 64 : id==Blur ? 30 : id==IconSize ? 72 : 100;
         SendMessageW(slider,TBM_SETRANGE,TRUE,MAKELONG(lo,hi)); SendMessageW(slider,TBM_SETPAGESIZE,0,4);
     }
-    auto items=add(Items,WC_LISTVIEWW,L"Ярлыки группы",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOSORTHEADER);
+    auto items=add(Items,WC_LISTVIEWW,L"Ярлыки группы",LVS_REPORT|LVS_SINGLESEL|LVS_SHOWSELALWAYS|LVS_NOSORTHEADER|LVS_NOCOLUMNHEADER);
     ListView_SetExtendedListViewStyle(items,LVS_EX_FULLROWSELECT|LVS_EX_DOUBLEBUFFER|LVS_EX_LABELTIP);
     ListView_SetBkColor(items,RGB(27,30,40)); ListView_SetTextBkColor(items,RGB(27,30,40)); ListView_SetTextColor(items,RGB(235,235,245));
     LVCOLUMNW col{}; col.mask=LVCF_TEXT|LVCF_WIDTH; col.pszText=const_cast<LPWSTR>(L"Название"); col.cx=static_cast<int>(235*scale); ListView_InsertColumn(items,0,&col);
@@ -70,7 +70,7 @@ void Settings::layout() {
     place(Labels,278,604,405,28); place(Lock,278,637,405,28);
     place(Tint,726,348,232,36); place(Background,726,402,232,36); place(ClearBackground,726,446,232,32);
     place(ImageOpacity,722,522,240,28);
-    place(Search,278,188,680,32); place(Items,278,234,680,283);
+    place(Search,278,188,680,32); place(Items,278,262,680,255);
     place(AddFiles,278,531,250,38); place(AddFolder,540,531,200,38); place(Remove,752,531,206,38);
     place(Portal,278,587,250,38); place(ClearPortal,540,587,240,38); place(Launch,792,587,166,38);
     place(Startup,278,199,650,32); place(Snap,278,253,650,32);
@@ -209,6 +209,8 @@ void Settings::paint() {
             }
         } else if(tab==1) {
             label(L"Поиск ярлыков в выбранной группе",278,159,670);
+            fillRound(g,RectF(278,234,680,29),5,Color(255,35,38,51));
+            label(L"Название",288,236,222); label(L"Путь",520,236,400);
             auto caption=p && !p->group.folder.empty() ? L"Папка: "+wide(p->group.folder) : L"Ярлыки ссылаются на оригиналы. Файлы остаются на своих местах.";
             drawText(g,caption,RectF(278,642,680,36),11,Color(255,142,149,170));
         } else {
@@ -248,6 +250,7 @@ LRESULT CALLBACK Settings::proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     }
     case WM_CTLCOLORSTATIC: case WM_CTLCOLORBTN: case WM_CTLCOLOREDIT: case WM_CTLCOLORLISTBOX: {
         auto dc=reinterpret_cast<HDC>(wp); SetTextColor(dc,RGB(227,230,240)); SetBkColor(dc,RGB(36,39,50));
+        if(msg==WM_CTLCOLORLISTBOX) {SetBkColor(dc,RGB(23,25,34)); return reinterpret_cast<LRESULT>(s->sideBrush);}
         if(msg==WM_CTLCOLORSTATIC || msg==WM_CTLCOLORBTN) {SetBkColor(dc,RGB(18,20,27)); return reinterpret_cast<LRESULT>(s->brush);}
         return reinterpret_cast<LRESULT>(s->fieldBrush);
     }
@@ -276,9 +279,10 @@ LRESULT CALLBACK Settings::proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         // This compact settings window is scaled to fit the destination work area.
         auto suggested=reinterpret_cast<RECT*>(lp); MONITORINFO info{}; info.cbSize=sizeof(info); GetMonitorInfoW(MonitorFromRect(suggested,MONITOR_DEFAULTTONEAREST),&info);
         s->scale=std::min({HIWORD(wp)/96.f,(info.rcWork.right-info.rcWork.left)/1040.f,(info.rcWork.bottom-info.rcWork.top)/760.f});
+        s->loading=true;
         for(auto [id,child]:s->controls) DestroyWindow(child);
         s->controls.clear();
-        DeleteObject(s->font); DeleteObject(s->titleFont); DeleteObject(s->brush); DeleteObject(s->fieldBrush); s->build();
+        DeleteObject(s->font); DeleteObject(s->titleFont); DeleteObject(s->brush); DeleteObject(s->fieldBrush); DeleteObject(s->sideBrush); s->build();
         RECT r{0,0,static_cast<LONG>(1000*s->scale),static_cast<LONG>(700*s->scale)}; AdjustWindowRectEx(&r,static_cast<DWORD>(GetWindowLongW(hwnd,GWL_STYLE)),FALSE,0);
         SetWindowPos(hwnd,nullptr,suggested->left,suggested->top,r.right-r.left,r.bottom-r.top,SWP_NOZORDER|SWP_NOACTIVATE); s->refresh(); return 0;
     }
