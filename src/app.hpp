@@ -34,6 +34,7 @@ bool loadState(const std::filesystem::path& file, State& state);
 bool saveState(const std::filesystem::path& file, const State& state, bool backup=true);
 bool startupEnabled(); bool setStartup(bool enabled);
 void clampToMonitor(Group& group, float scale);
+std::wstring hotkeyText(Hotkey key);
 std::unique_ptr<Gdiplus::Bitmap> loadImage(const std::wstring& file);
 void roundPath(Gdiplus::GraphicsPath& path, Gdiplus::RectF rect, float radius);
 void drawText(Gdiplus::Graphics& g, const std::wstring& text, Gdiplus::RectF rect, float size,
@@ -86,6 +87,9 @@ public:
     float scale=1; uint32_t target=0; bool loading=false; int tab=0;
     std::map<int,HWND> controls;
     std::vector<size_t> filtered;
+    std::wstring hotkeyStatus;
+    bool hotkeyDraft=false;
+    Hotkeys readHotkeys(); void fillHotkeys();
     void open(uint32_t id=0); void build(); void layout(); void paint(); void refresh(bool list=true);
     void update(int id); void command(int id); void fillItems(); void selectGroup(uint32_t id);
     Panel* panel(); void refreshGroups();
@@ -97,6 +101,8 @@ public:
     HINSTANCE instance=nullptr; HWND controller=nullptr; HICON icon=nullptr; ULONG_PTR gdiplus=0;
     NOTIFYICONDATAW tray{}; HWINEVENTHOOK foregroundHook=nullptr; UINT taskbarCreated=0;
     bool visible=true, snap=true, dirty=false, closing=false, hotkeyOk=true; uint32_t nextId=1;
+    Hotkeys hotkeys=defaultHotkeys;
+    void registerHotkeys(); bool changeHotkeys(const Hotkeys& next,std::wstring& error);
     std::vector<std::unique_ptr<Panel>> panels; std::unique_ptr<Settings> settings;
     std::vector<Wallpaper> wallpapers; COLORREF wallpaperColor=RGB(26,32,46);
     bool initialize(HINSTANCE); void shutdown(); void load(); bool save(); void changed();

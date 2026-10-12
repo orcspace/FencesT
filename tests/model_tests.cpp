@@ -20,5 +20,32 @@ int main() {
     require(clamped.width==260 && clamped.height==1400 && clamped.radius==64 && clamped.opacity==0);
     s.groups.push_back(g); require(rejects(encode(s)));
     State empty; require(decode(encode(empty)).groups.empty());
+    State custom; custom.groups.push_back(g); custom.hotkeys={{{3,'H'},{6,'J'}}};
+    auto hotkeyBytes=encode(custom); require(decode(hotkeyBytes).hotkeys==custom.hotkeys);
+    auto legacy=hotkeyBytes;
+    legacy.erase(legacy.end()-20,legacy.end()); // Version 1 ended immediately after group records.
+    legacy[4]=1; Writer trailer; trailer.number(checksum(legacy,legacy.size()));
+    legacy.insert(legacy.end(),trailer.data.begin(),trailer.data.end());
+    auto migrated=decode(legacy); require(migrated.hotkeys==defaultHotkeys && migrated.groups[0].name==g.name);
+    require(migrated.groups[0].folder==g.folder && !migrated.groups[0].showLabels);
+    require(!validHotkeys({{{3,'A'},{3,'A'}}})); require(!validHotkey({0,'A'}));
+    require(!validHotkey({2,0x7b})); require(!validHotkey({16,'A'})); require(validHotkey({0,0x70}));
+    require(validHotkeys({{{0,0},{0,0}}}));
+    Hotkeys registered=defaultHotkeys;
+    Hotkey external{3,'K'};
+    auto remove=[&](int id){registered[id]={};};
+    auto reg=[&](int id,Hotkey key){
+        if(key==external || (key.key && key==registered[1-id])) return false;
+        registered[id]=key; return true;
+    };
+    auto result=replaceHotkeys(defaultHotkeys,Hotkeys{{defaultHotkeys[1],defaultHotkeys[0]}},remove,reg);
+    require(result.success && registered[0]==defaultHotkeys[1] && registered[1]==defaultHotkeys[0]);
+    auto before=registered;
+    result=replaceHotkeys(before,Hotkeys{{{3,'H'},external}},remove,reg);
+    require(!result.success && result.restored && result.failedAction==1 && registered==before);
+    result=replaceHotkeys(before,Hotkeys{{{3,'H'},{3,'H'}}},remove,reg);
+    require(!result.success && registered==before);
+    result=replaceHotkeys(before,Hotkeys{},remove,reg);
+    require(result.success && registered==Hotkeys{});
     std::cout << "State round-trip, Unicode, corruption, bounds, duplicates and truncation checks passed.\n";
 }

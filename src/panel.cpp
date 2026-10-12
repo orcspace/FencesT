@@ -117,7 +117,8 @@ void Panel::menu(POINT pt) {
     if(group.folder.empty()) {AppendMenuW(menu,MF_STRING,208,L"Добавить файлы или приложения…"); AppendMenuW(menu,MF_STRING,209,L"Добавить ярлык папки…");}
     else {AppendMenuW(menu,MF_STRING,215,L"Открыть исходную папку"); AppendMenuW(menu,MF_STRING,210,L"Обновить содержимое");}
     AppendMenuW(menu,MF_STRING,211,L"Новая группа"); AppendMenuW(menu,MF_STRING,212,L"Дублировать группу");
-    AppendMenuW(menu,MF_STRING,213,L"Скрыть все группы\tWin+Alt+F"); AppendMenuW(menu,MF_STRING,214,L"Удалить группу…");
+    auto hide=L"Скрыть все группы\t"+hotkeyText(app.hotkeys[0]);
+    AppendMenuW(menu,MF_STRING,213,hide.c_str()); AppendMenuW(menu,MF_STRING,214,L"Удалить группу…");
     SetForegroundWindow(hwnd); int choice=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,pt.x,pt.y,0,hwnd,nullptr); DestroyMenu(menu);
     switch(choice) {
     case 201: activate(hit); break;

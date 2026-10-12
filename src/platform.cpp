@@ -4,6 +4,22 @@
 #include <sstream>
 
 namespace ft {
+std::wstring hotkeyText(Hotkey h) {
+    if(!h.key) return L"Отключено";
+    std::wstring text;
+    if(h.modifiers&2) text+=L"Ctrl + ";
+    if(h.modifiers&1) text+=L"Alt + ";
+    if(h.modifiers&4) text+=L"Shift + ";
+    if(h.modifiers&8) text+=L"Win + ";
+    if(h.key>=0x70 && h.key<=0x87) text+=L"F"+std::to_wstring(h.key-0x70+1);
+    else if(h.key==VK_SPACE) text+=L"Space";
+    else if(h.key==VK_TAB) text+=L"Tab";
+    else if(h.key>=0x21 && h.key<=0x28) {const wchar_t* names[]={L"Page Up",L"Page Down",L"End",L"Home",L"Left",L"Up",L"Right",L"Down"}; text+=names[h.key-0x21];}
+    else if(h.key==VK_INSERT) text+=L"Insert";
+    else if(h.key==VK_DELETE) text+=L"Delete";
+    else text+=static_cast<wchar_t>(h.key);
+    return text;
+}
 std::wstring wide(const std::string& s) {
     if(s.empty()) return {};
     int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s.data(),static_cast<int>(s.size()),nullptr,0);

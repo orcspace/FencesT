@@ -4,6 +4,8 @@
 
 `model_tests` checks UTF-8 names and paths, signed multi-monitor positions, transparent/rounded style settings, empty layouts, duplicate shortcuts, bounds, duplicate IDs, every possible truncated input prefix and one-bit corruption at every byte of a representative layout. CI builds with MSVC, runs these tests, checks that the application remains running, and packages an x64 ZIP.
 
+Hotkey checks cover persistence, version 1 layout migration without losing groups, invalid/duplicate/reserved combinations, swapping the two actions, disabling both, and restoring both previous registrations after a conflict on the second action. Also manually verify remapping, restart, disable/reset and a conflict with a second application on Windows.
+
 ## Manual Windows 11 checklist
 
 - [ ] Drag an `.lnk`, `.url`, executable, folder and document from Explorer; verify the originals are not moved.

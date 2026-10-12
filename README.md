@@ -2,7 +2,7 @@
 
 Native C++ desktop organizer for **Windows 11 x64**. Create groups of application shortcuts, folders and files, then give every group its own material, transparency and rounded corners.
 
-**Status: 0.1, first working preview.** This is an independent implementation, not affiliated with Stardock or Apple.
+**Status: 0.1.1, working preview.** This is an independent implementation, not affiliated with Stardock or Apple.
 
 ## Features
 
@@ -16,7 +16,7 @@ Native C++ desktop organizer for **Windows 11 x64**. Create groups of applicatio
 - Search the selected group's shortcuts by name or path.
 - Grid snapping (hold **Shift** to bypass).
 - Export/import layouts, atomic saves, backup/recovery and single-instance protection.
-- System tray, optional startup at login and global shortcuts.
+- System tray, optional startup at login and configurable global shortcuts (Ctrl/Alt/Shift/Win + key), conflict detection, disable and reset.
 - Per-monitor DPI handling and recovery when monitors disconnect.
 
 ## Run
@@ -40,6 +40,8 @@ Full guide: [Русская инструкция](docs/QUICKSTART.ru.md).
 | Group settings | F2 or `…` |
 | Refresh contents | F5 |
 | Ignore snap grid | Hold Shift while finishing a drag |
+
+The two global shortcuts can be changed in **Настройки → Горячие клавиши**. Choose modifiers and a primary key, then click **Применить клавиши**. Select **Отключено** to disable an action, or **Вернуть стандартные** to restore the defaults. Conflicting/duplicate combinations are rejected and the previous bindings restored. F12 is reserved by Windows and excluded. Local F2/F5/navigation keys remain fixed. Version 0.1 layouts load with the original defaults; newer exports include the chosen hotkeys.
 
 ## How it works / current limits
 

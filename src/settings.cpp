@@ -6,7 +6,17 @@ enum Control { Groups=1000, New, Duplicate, Delete, TabLook=1100, TabItems, TabA
     Name=1200, Glass, Clear, Matte, Opacity=1210, Radius, Blur, IconSize, ImageOpacity,
     Labels=1220, Lock, Tint, Background, ClearBackground,
     Search=1300, Items, AddFiles, AddFolder, Remove, Portal, ClearPortal, Launch,
-    Startup=1400, Snap, Export, Import, Project };
+    Startup=1400, Snap, Export, Import, Project,
+    ShowKey=1410, ShowCtrl, ShowAlt, ShowShift, ShowWin,
+    NewKey=1420, NewCtrl, NewAlt, NewShift, NewWin, ApplyKeys=1430, ResetKeys };
+static std::vector<uint32_t> keyChoices() {
+    std::vector<uint32_t> keys{0};
+    for(uint32_t key='A';key<='Z';++key) keys.push_back(key);
+    for(uint32_t key='0';key<='9';++key) keys.push_back(key);
+    for(uint32_t key=0x70;key<=0x87;++key) if(key!=0x7b) keys.push_back(key);
+    for(auto key:{0x20u,0x09u,0x21u,0x22u,0x23u,0x24u,0x25u,0x26u,0x27u,0x28u,0x2du,0x2eu}) keys.push_back(key);
+    return keys;
+}
 static bool appearance(int id) {return id>=1200 && id<1300;}
 static bool shortcuts(int id) {return id>=1300 && id<1400;}
 static bool global(int id) {return id>=1400;}
@@ -14,6 +24,7 @@ static std::wstring lowered(std::wstring value) {for(auto& c:value) c=static_cas
 Settings::~Settings() {if(hwnd) DestroyWindow(hwnd); if(font) DeleteObject(font); if(titleFont) DeleteObject(titleFont); if(brush) DeleteObject(brush); if(fieldBrush) DeleteObject(fieldBrush); if(sideBrush) DeleteObject(sideBrush);}
 Panel* Settings::panel() {return app.find(target);}
 void Settings::open(uint32_t id) {
+    hotkeyDraft=false; hotkeyStatus.clear();
     if(id) target=id;
     if(!hwnd) {
         MONITORINFO info{}; info.cbSize=sizeof(info); POINT cursor; GetCursorPos(&cursor); GetMonitorInfoW(MonitorFromPoint(cursor,MONITOR_DEFAULTTONEAREST),&info);
@@ -40,12 +51,23 @@ void Settings::build() {
         {TabLook,L"Оформление"},{TabItems,L"Ярлыки"},{TabApp,L"Настройки"},{Glass,L"Liquid Glass"},{Clear,L"Прозрачный"},{Matte,L"Тёмный матовый"},
         {Tint,L"Цвет фона"},{Background,L"Выбрать картинку…"},{ClearBackground,L"Убрать картинку"},
         {AddFiles,L"+ Файлы и приложения"},{AddFolder,L"+ Ярлык папки"},{Remove,L"Убрать ярлык"},{Portal,L"Связать с папкой…"},
-        {ClearPortal,L"Отключить связь"},{Launch,L"Открыть"},{Export,L"Экспорт раскладки…"},{Import,L"Восстановить…"},{Project,L"Открыть GitHub"}})
+        {ClearPortal,L"Отключить связь"},{Launch,L"Открыть"},{Export,L"Экспорт раскладки…"},{Import,L"Восстановить…"},{Project,L"Открыть GitHub"},
+        {ApplyKeys,L"Применить клавиши"},{ResetKeys,L"Вернуть стандартные"}})
         add(id,L"BUTTON",text,BS_OWNERDRAW);
     add(Name,L"EDIT",L"",ES_AUTOHSCROLL); SendMessageW(controls[Name],EM_SETLIMITTEXT,80,0);
     add(Search,L"EDIT",L"",ES_AUTOHSCROLL); SendMessageW(controls[Search],EM_SETCUEBANNER,TRUE,reinterpret_cast<LPARAM>(L"Поиск по названию или пути…"));
     for(auto [id,text]:std::vector<std::pair<int,const wchar_t*>>{{Labels,L"Показывать названия приложений"},{Lock,L"Закрепить положение и размер"},
         {Startup,L"Запускать вместе с Windows"},{Snap,L"Выравнивать группы по сетке"}}) add(id,L"BUTTON",text,BS_AUTOCHECKBOX);
+    for(int base:{ShowKey,NewKey}) {
+        auto combo=add(base,L"COMBOBOX",base==ShowKey ? L"Показать или скрыть группы" : L"Новая группа",CBS_DROPDOWNLIST|WS_VSCROLL);
+        for(auto key:keyChoices()) {
+            auto name=hotkeyText({0,key});
+            auto row=SendMessageW(combo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));
+            SendMessageW(combo,CB_SETITEMDATA,row,key);
+        }
+        for(auto [offset,name]:std::vector<std::pair<int,const wchar_t*>>{{1,L"Ctrl"},{2,L"Alt"},{3,L"Shift"},{4,L"Win"}})
+            add(base+offset,L"BUTTON",name,BS_AUTOCHECKBOX);
+    }
     for(int id=Opacity;id<=ImageOpacity;++id) {
         auto slider=add(id,TRACKBAR_CLASSW,L"",TBS_HORZ|TBS_NOTICKS);
         int lo=id==IconSize ? 24 : 0, hi=id==Radius ? 64 : id==Blur ? 30 : id==IconSize ? 72 : 100;
@@ -73,8 +95,14 @@ void Settings::layout() {
     place(Search,278,188,680,32); place(Items,278,262,680,255);
     place(AddFiles,278,531,250,38); place(AddFolder,540,531,200,38); place(Remove,752,531,206,38);
     place(Portal,278,587,250,38); place(ClearPortal,540,587,240,38); place(Launch,792,587,166,38);
-    place(Startup,278,199,650,32); place(Snap,278,253,650,32);
-    place(Export,278,382,330,42); place(Import,628,382,330,42); place(Project,278,569,220,38);
+    place(Startup,278,174,650,28); place(Snap,278,209,650,28);
+    place(ShowKey,738,313,220,250); place(NewKey,738,383,220,250);
+    for(int offset=1;offset<=4;++offset) {
+        place(ShowKey+offset,278+(offset-1)*103,344,95,26);
+        place(NewKey+offset,278+(offset-1)*103,414,95,26);
+    }
+    place(ApplyKeys,278,456,220,38); place(ResetKeys,514,456,240,38);
+    place(Export,278,579,330,40); place(Import,628,579,330,40); place(Project,758,642,200,32);
     for(auto [id,child]:controls) {
         bool visible=(!appearance(id) && !shortcuts(id) && !global(id)) || (appearance(id)&&tab==0) || (shortcuts(id)&&tab==1) || (global(id)&&tab==2);
         ShowWindow(child,visible ? SW_SHOW : SW_HIDE);
@@ -91,6 +119,31 @@ void Settings::refreshGroups() {
     SendMessageW(controls[Groups],LB_SETCURSEL,selected,0);
 }
 void Settings::selectGroup(uint32_t id) {target=id; refresh();}
+Hotkeys Settings::readHotkeys() {
+    Hotkeys keys{};
+    int action=0;
+    for(int base:{ShowKey,NewKey}) {
+        auto row=SendMessageW(controls[base],CB_GETCURSEL,0,0);
+        if(row!=CB_ERR) keys[action].key=static_cast<uint32_t>(SendMessageW(controls[base],CB_GETITEMDATA,row,0));
+        if(keys[action].key) {
+            const uint32_t modifiers[]={2,1,4,8};
+            for(int n=0;n<4;++n) if(SendMessageW(controls[base+n+1],BM_GETCHECK,0,0)==BST_CHECKED) keys[action].modifiers|=modifiers[n];
+        }
+        ++action;
+    }
+    return keys;
+}
+void Settings::fillHotkeys() {
+    hotkeyDraft=false;
+    auto choices=keyChoices(); int action=0;
+    for(int base:{ShowKey,NewKey}) {
+        auto h=app.hotkeys[action++];
+        auto found=std::find(choices.begin(),choices.end(),h.key);
+        SendMessageW(controls[base],CB_SETCURSEL,std::distance(choices.begin(),found),0);
+        const uint32_t modifiers[]={2,1,4,8};
+        for(int n=0;n<4;++n) SendMessageW(controls[base+n+1],BM_SETCHECK,(h.modifiers&modifiers[n]) ? BST_CHECKED : BST_UNCHECKED,0);
+    }
+}
 void Settings::refresh(bool list) {
     if(!hwnd) return;
     loading=true;
@@ -109,6 +162,7 @@ void Settings::refresh(bool list) {
     }
     SendMessageW(controls[Startup],BM_SETCHECK,startupEnabled() ? BST_CHECKED : BST_UNCHECKED,0);
     SendMessageW(controls[Snap],BM_SETCHECK,app.snap ? BST_CHECKED : BST_UNCHECKED,0);
+    if(!hotkeyDraft) fillHotkeys();
     fillItems(); loading=false; InvalidateRect(hwnd,nullptr,TRUE); for(auto [id,child]:controls) if(id>=Glass&&id<=Matte) InvalidateRect(child,nullptr,TRUE);
 }
 void Settings::fillItems() {
@@ -135,11 +189,18 @@ void Settings::update(int id) {
 }
 void Settings::command(int id) {
     if(loading) return;
+    if((id>=ShowCtrl && id<=ShowWin) || (id>=NewCtrl && id<=NewWin)) {hotkeyDraft=true; return;}
     if(id>=TabLook&&id<=TabApp) {tab=id-TabLook; layout(); return;}
     if(id==New) {app.addGroup(); return;}
     if(id==Export) {app.exportLayout(); return;} if(id==Import) {app.importLayout(); return;}
     if(id==Startup) {if(!setStartup(SendMessageW(controls[Startup],BM_GETCHECK,0,0)==BST_CHECKED)) showError(hwnd,L"Не удалось изменить автозапуск."); refresh(false); return;}
     if(id==Snap) {app.snap=SendMessageW(controls[Snap],BM_GETCHECK,0,0)==BST_CHECKED; app.changed(); return;}
+    if(id==ApplyKeys || id==ResetKeys) {
+        auto next=id==ResetKeys ? defaultHotkeys : readHotkeys();
+        if(app.changeHotkeys(next,hotkeyStatus)) {hotkeyStatus=L"Сочетания сохранены и действуют сразу."; fillHotkeys();}
+        else showError(hwnd,hotkeyStatus);
+        InvalidateRect(hwnd,nullptr,TRUE); return;
+    }
     if(id==Project) {ShellExecuteW(hwnd,L"open",L"https://github.com/orcspace/FencesT",nullptr,nullptr,SW_SHOWNORMAL); return;}
     auto p=panel(); if(!p) return;
     switch(id) {
@@ -190,7 +251,7 @@ void Settings::paint() {
         for(int row=0;row<3;++row) {fillRound(g,RectF(34,38.f+row*8,6,4),1,Color(255,23,20,40)); fillRound(g,RectF(44,38.f+row*8,row==2?7.f:11.f,4),1,Color(255,23,20,40));}
         drawText(g,L"FencesT",RectF(76,27,154,28),23,Color(255,246,246,255),true);
         drawText(g,L"ТВОЙ РАБОЧИЙ СТОЛ",RectF(26,102,200,22),10,Color(255,129,133,153),true);
-        drawText(g,L"Win + Alt + F",RectF(26,636,190,22),12,Color(255,195,182,255));
+        drawText(g,hotkeyText(app.hotkeys[0]),RectF(26,636,205,22),11,Color(255,195,182,255));
         drawText(g,L"Показать / скрыть группы",RectF(26,658,200,18),10,Color(255,132,138,156));
         auto p=panel(); std::wstring title=tab==2 ? L"Всё на своём месте" : p ? wide(p->group.name) : L"Создайте первую группу";
         drawText(g,title,RectF(278,24,674,38),27,Color(255,246,246,252),true);
@@ -214,14 +275,15 @@ void Settings::paint() {
             auto caption=p && !p->group.folder.empty() ? L"Папка: "+wide(p->group.folder) : L"Ярлыки ссылаются на оригиналы. Файлы остаются на своих местах.";
             drawText(g,caption,RectF(278,642,680,36),11,Color(255,142,149,170));
         } else {
-            label(L"РАБОТА ПРИЛОЖЕНИЯ",278,157,600);
-            label(L"Удерживайте Shift при перемещении, чтобы временно отключить сетку.",278,298,690);
-            label(L"РЕЗЕРВНАЯ КОПИЯ",278,341,600);
-            label(L"В файл сохраняются расположение, оформление и ссылки на ваши файлы.",278,440,690);
-            label(L"Сами приложения, документы и фоновые картинки в копию не включаются.",278,465,690);
-            label(L"Win + Alt + F — скрыть / показать.  Win + Alt + N — новая группа.",278,516,690);
-            label(app.hotkeyOk ? L"F2 — оформление группы.  F5 — обновить.  Двойной щелчок — открыть." : L"Горячая клавиша занята. Используйте меню значка в трее.",278,541,690);
-            label(L"FencesT 0.1 • Windows • C++",278,643,690);
+            label(L"Удерживайте Shift при перемещении, чтобы отключить сетку.",278,245,690);
+            label(L"ГОРЯЧИЕ КЛАВИШИ",278,282,650);
+            label(L"Показать / скрыть группы",278,314,440);
+            label(L"Новая группа",278,384,440);
+            auto status=hotkeyStatus.empty() ? (app.hotkeyOk ? L"Выберите сочетания и нажмите «Применить клавиши»." : L"Сочетание занято. Выберите другое; значок в трее доступен.") : hotkeyStatus.c_str();
+            label(status,278,503,680);
+            label(L"РЕЗЕРВНАЯ КОПИЯ",278,543,600);
+            label(L"В копии сохраняются настройки и ссылки; сами файлы не копируются.",278,622,690);
+            label(L"FencesT 0.1.1 • Windows • C++",278,652,440);
         }
     }
     Graphics screen(dc); screen.DrawImage(&image,0,0); EndPaint(hwnd,&ps);
@@ -241,6 +303,7 @@ LRESULT CALLBACK Settings::proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         if(id==Groups && code==LBN_SELCHANGE) {auto row=SendMessageW(s->controls[Groups],LB_GETCURSEL,0,0); s->target=static_cast<uint32_t>(SendMessageW(s->controls[Groups],LB_GETITEMDATA,row,0)); s->refresh(false);}
         else if(id==Name && code==EN_KILLFOCUS) s->command(id);
         else if(id==Search && code==EN_CHANGE) s->fillItems();
+        else if((id==ShowKey || id==NewKey) && code==CBN_SELCHANGE) s->hotkeyDraft=true;
         else if(code==BN_CLICKED) s->command(id);
         return 0;
     }
@@ -279,7 +342,7 @@ LRESULT CALLBACK Settings::proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         // This compact settings window is scaled to fit the destination work area.
         auto suggested=reinterpret_cast<RECT*>(lp); MONITORINFO info{}; info.cbSize=sizeof(info); GetMonitorInfoW(MonitorFromRect(suggested,MONITOR_DEFAULTTONEAREST),&info);
         s->scale=std::min({HIWORD(wp)/96.f,(info.rcWork.right-info.rcWork.left)/1040.f,(info.rcWork.bottom-info.rcWork.top)/760.f});
-        s->loading=true;
+        s->loading=true; s->hotkeyDraft=false;
         for(auto [id,child]:s->controls) DestroyWindow(child);
         s->controls.clear();
         DeleteObject(s->font); DeleteObject(s->titleFont); DeleteObject(s->brush); DeleteObject(s->fieldBrush); DeleteObject(s->sideBrush); s->build();

@@ -41,15 +41,13 @@ bool App::initialize(HINSTANCE h) {
     taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated");
     tray.cbSize=sizeof(tray); tray.hWnd=controller; tray.uID=ID_TRAY; tray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP; tray.uCallbackMessage=WM_TRAY; tray.hIcon=icon;
     wcscpy_s(tray.szTip,L"FencesT • Рабочий стол по-твоему"); Shell_NotifyIconW(NIM_ADD,&tray);
-    bool toggle=RegisterHotKey(controller,1,MOD_WIN|MOD_ALT|MOD_NOREPEAT,'F')!=FALSE;
-    bool create=RegisterHotKey(controller,2,MOD_WIN|MOD_ALT|MOD_NOREPEAT,'N')!=FALSE; hotkeyOk=toggle&&create;
     foregroundHook=SetWinEventHook(EVENT_SYSTEM_FOREGROUND,EVENT_SYSTEM_FOREGROUND,nullptr,App::foreground,0,0,WINEVENT_OUTOFCONTEXT|WINEVENT_SKIPOWNPROCESS);
     reloadWallpaper(); settings=std::make_unique<Settings>(*this); load(); lowerPanels(*this);
     SetTimer(controller,2,1200,nullptr); return true;
 }
-State App::snapshot() const {State state; state.nextId=nextId; state.snap=snap; for(auto& p:panels) state.groups.push_back(p->group); return state;}
+State App::snapshot() const {State state; state.nextId=nextId; state.snap=snap; state.hotkeys=hotkeys; for(auto& p:panels) state.groups.push_back(p->group); return state;}
 void App::restore(const State& state) {
-    panels.clear(); nextId=state.nextId; snap=state.snap;
+    panels.clear(); nextId=state.nextId; snap=state.snap; hotkeys=state.hotkeys; registerHotkeys();
     for(const auto& group:state.groups) {auto p=std::make_unique<Panel>(*this,group); if(p->create()) panels.push_back(std::move(p));}
     if(settings && settings->hwnd) settings->refresh();
     lowerPanels(*this);
@@ -85,6 +83,31 @@ bool App::save() {
     return ok;
 }
 void App::changed() {dirty=true; SetTimer(controller,1,450,nullptr);}
+void App::registerHotkeys() {
+    hotkeyOk=true;
+    for(int i=0;i<2;++i) UnregisterHotKey(controller,i+1);
+    for(int i=0;i<2;++i) {
+        if(hotkeys[i].key && !RegisterHotKey(controller,i+1,hotkeys[i].modifiers|MOD_NOREPEAT,hotkeys[i].key)) hotkeyOk=false;
+    }
+    if(!hotkeyOk) notify(L"Горячая клавиша недоступна",L"Сочетание занято другой программой или Windows. Выберите другое в настройках FencesT.");
+}
+bool App::changeHotkeys(const Hotkeys& next,std::wstring& error) {
+    if(!validHotkeys(next)) {
+        error=next[0].key && next[0]==next[1] ? L"Для двух действий выберите разные сочетания." : L"Выберите модификатор Ctrl, Alt, Shift или Win. Без модификатора допускаются только F-клавиши. F12 недоступна.";
+        return false;
+    }
+    const auto result=replaceHotkeys(hotkeys,next,[&](int i){UnregisterHotKey(controller,i+1);},
+        [&](int i,Hotkey h){return RegisterHotKey(controller,i+1,h.modifiers|MOD_NOREPEAT,h.key)!=FALSE;});
+    if(!result.success) {
+        hotkeyOk=result.restored;
+        error=L"Сочетание "+hotkeyText(next[result.failedAction])+L" занято другой программой или Windows. Выберите другое.";
+        if(!result.restored) error+=L" Не удалось восстановить прежние сочетания; используйте значок в трее.";
+        return false;
+    }
+    hotkeys=next; hotkeyOk=true; changed();
+    if(!save()) {error=L"Сочетания применены, но сохранить их на диск не удалось."; return false;}
+    return true;
+}
 Panel* App::find(uint32_t id) {for(auto& p:panels) if(p->group.id==id) return p.get(); return nullptr;}
 void App::addGroup(const Group* source) {
     if(panels.size()>=maxGroups) {showError(settings ? settings->hwnd : nullptr,L"Достигнут лимит: 48 групп."); return;}
@@ -110,7 +133,8 @@ void App::notify(const wchar_t* title,const wchar_t* body) {
 }
 void App::trayMenu() {
     HMENU menu=CreatePopupMenu(); AppendMenuW(menu,MF_STRING,ID_SETTINGS,L"Открыть FencesT"); AppendMenuW(menu,MF_STRING,ID_NEW,L"Новая группа");
-    AppendMenuW(menu,MF_STRING,ID_SHOW,visible ? L"Скрыть группы\tWin+Alt+F" : L"Показать группы\tWin+Alt+F");
+    auto showLabel=(visible ? L"Скрыть группы\t" : L"Показать группы\t")+hotkeyText(hotkeys[0]);
+    AppendMenuW(menu,MF_STRING,ID_SHOW,showLabel.c_str());
     AppendMenuW(menu,MF_SEPARATOR,0,nullptr); AppendMenuW(menu,MF_STRING,ID_EXPORT,L"Экспорт раскладки…"); AppendMenuW(menu,MF_STRING,ID_IMPORT,L"Восстановить раскладку…");
     AppendMenuW(menu,MF_SEPARATOR,0,nullptr); AppendMenuW(menu,MF_STRING,ID_QUIT,L"Выход");
     POINT pt; GetCursorPos(&pt); SetForegroundWindow(controller); TrackPopupMenu(menu,TPM_RIGHTBUTTON,pt.x,pt.y,0,controller,nullptr); DestroyMenu(menu); PostMessageW(controller,WM_NULL,0,0);

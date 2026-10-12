@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "hotkeys.hpp"
 
 namespace ft {
 enum class Style : uint32_t { Glass, Clear, Matte };
@@ -22,7 +23,7 @@ struct Group {
     std::string image, folder;
     std::vector<Item> items;
 };
-struct State { uint32_t nextId = 1; bool snap = true; std::vector<Group> groups; };
+struct State { uint32_t nextId = 1; bool snap = true; std::vector<Group> groups; Hotkeys hotkeys=defaultHotkeys; };
 constexpr size_t maxGroups = 48, maxItems = 512, maxStateBytes = 8 * 1024 * 1024;
 
 inline void validate(Group& g) {
@@ -73,7 +74,8 @@ inline uint32_t checksum(const std::vector<uint8_t>& bytes, size_t end) {
 }
 inline std::vector<uint8_t> encode(const State& state) {
     if (state.groups.size()>maxGroups) throw std::runtime_error("Too many groups");
-    Writer w; w.number(0x31535446); w.number(1); w.number(state.nextId); w.number(state.snap ? 1 : 0); w.number(static_cast<uint32_t>(state.groups.size()));
+    if(!validHotkeys(state.hotkeys)) throw std::runtime_error("Invalid hotkeys");
+    Writer w; w.number(0x31535446); w.number(2); w.number(state.nextId); w.number(state.snap ? 1 : 0); w.number(static_cast<uint32_t>(state.groups.size()));
     for(auto g:state.groups) {
         validate(g); w.number(g.id); w.text(g.name); w.number(g.x); w.number(g.y); w.number(g.width); w.number(g.height);
         w.number(static_cast<uint32_t>(g.style)); w.number(g.opacity); w.number(g.radius); w.number(g.blur); w.number(g.tint);
@@ -81,12 +83,14 @@ inline std::vector<uint8_t> encode(const State& state) {
         w.number(g.iconSize); w.text(g.image); w.text(g.folder);
         w.number(static_cast<uint32_t>(g.items.size())); for(const auto& i:g.items) {w.text(i.path); w.text(i.label);}
     }
+    for(const auto& h:state.hotkeys) {w.number(h.modifiers); w.number(h.key);}
     if(w.data.size()+4>maxStateBytes) throw std::runtime_error("State too large");
     w.number(checksum(w.data,w.data.size())); return w.data;
 }
 inline State decode(const std::vector<uint8_t>& data) {
     if(data.size()<20 || data.size()>maxStateBytes) throw std::runtime_error("Invalid state size");
-    Reader r{data}; if(r.number()!=0x31535446 || r.number()!=1) throw std::runtime_error("Unsupported state format");
+    Reader r{data}; if(r.number()!=0x31535446) throw std::runtime_error("Unsupported state format");
+    auto version=r.number(); if(version!=1 && version!=2) throw std::runtime_error("Unsupported state format");
     State s; s.nextId=r.number(); s.snap=r.number()!=0; const auto count=r.number(); if(count>maxGroups) throw std::runtime_error("Too many groups");
     uint32_t highest=0;
     for(uint32_t n=0;n<count;++n) {
@@ -101,6 +105,8 @@ inline State decode(const std::vector<uint8_t>& data) {
             throw std::runtime_error("Invalid group ID");
         validate(g); highest=std::max(highest,g.id); s.groups.push_back(std::move(g));
     }
+    if(version==2) for(auto& h:s.hotkeys) {h.modifiers=r.number(); h.key=r.number();}
+    if(!validHotkeys(s.hotkeys)) throw std::runtime_error("Invalid hotkeys");
     if(r.pos+4!=data.size() || r.number()!=checksum(data,data.size()-4)) throw std::runtime_error("Damaged state");
     s.nextId=std::max(highest+1,s.nextId); if(s.nextId==0 || s.nextId==std::numeric_limits<uint32_t>::max()) s.nextId=highest+1;
     return s;
